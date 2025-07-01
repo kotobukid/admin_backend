@@ -39,6 +39,9 @@ argon2 = "0.5"
 # UUID for client IDs
 uuid = { version = "1.11", features = ["v4", "serde"] }
 
+# Stream utilities
+tokio-stream = "0.1"
+
 [build-dependencies]
 tonic-build = "0.12"
 
