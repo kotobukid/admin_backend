@@ -13,7 +13,6 @@ wx_dbの複数拠点開発用同期サーバー。WIXOSSトレーディングカ
 
 ### 🚧 未実装機能
 - TLS証明書設定
-- APIキー生成CLIツール
 - ルールパターン同期
 - 確認済み機能の取得・取消し
 - Web管理画面
@@ -165,21 +164,104 @@ chmod 700 data/
 chmod 600 data/admin.db
 ```
 
-## APIキー生成
+## APIキー管理
 
-現在はCLIツール未実装のため、SQLiteで直接生成：
+APIキーの管理には専用CLIツールを使用します：
 
+### APIキー生成
 ```bash
-# SQLiteでAPIキーを手動生成（開発環境用）
-sqlite3 data/admin.db <<EOF
-INSERT INTO api_keys (key_hash, client_name, permissions, created_at)
-VALUES ('temporary_dev_key', 'dev-machine-1', 'read_write', datetime('now'));
-EOF
+# CLIツールのビルド
+cargo build --release --bin admin-cli
 
-# 注意：本番環境では必ずハッシュ化されたキーを使用すること
-# CLIツール実装後は以下のような形になる予定：
-# ./target/release/admin_backend generate-key --name "dev-machine-1" --permission read_write
+# APIキーの生成（read_write権限）
+./target/release/admin-cli generate --client "dev-machine-1" --permissions read_write
+
+# 読み取り専用APIキーの生成
+./target/release/admin-cli generate --client "monitoring-service" --permissions read
+
+# APIキー一覧表示
+./target/release/admin-cli list
+
+# 特定クライアントの情報表示
+./target/release/admin-cli info --client "dev-machine-1"
+
+# APIキーの取り消し（確認プロンプトあり）
+./target/release/admin-cli revoke --client "old-client"
 ```
+
+**重要**: 生成されたAPIキーは一度しか表示されません。安全に保管してください。
+
+## SQLiteマイグレーション管理
+
+プロジェクトではSQLxを使用してマイグレーションを管理しています：
+
+### マイグレーション基本コマンド
+```bash
+# マイグレーション状況確認
+DATABASE_URL=sqlite://data/admin.db sqlx migrate info
+
+# 新しいマイグレーション作成
+DATABASE_URL=sqlite://data/admin.db sqlx migrate add <description>
+
+# マイグレーション実行（手動）
+DATABASE_URL=sqlite://data/admin.db sqlx migrate run
+
+# 最新マイグレーションを取り消し
+DATABASE_URL=sqlite://data/admin.db sqlx migrate revert
+
+# オフラインクエリキャッシュ生成（CI/CDで有用）
+DATABASE_URL=sqlite://data/admin.db cargo sqlx prepare
+```
+
+### 自動マイグレーション
+サーバー起動時に自動的にマイグレーションが実行されるため、通常は手動実行は不要です。
+
+## gRPCテスト・動作確認
+
+### grpcurlのインストール
+```bash
+# Goが必要
+go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+
+# PATHに追加（~/.bashrcに記載）
+export PATH="$PATH:~/go/bin"
+```
+
+### 基本的なテスト
+```bash
+# サーバー起動
+RUST_LOG=info cargo run
+
+# 別ターミナルで以下を実行
+# APIキー生成
+./target/debug/admin-cli generate --client test-client --permissions read_write
+
+# 生成されたAPIキーを使用してテスト
+API_KEY="ADM_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# ヘルスチェック
+grpcurl -plaintext -proto proto/admin.proto -H "api-key: $API_KEY" localhost:50051 admin.AdminSync/GetSyncStatus
+
+# データ挿入テスト
+echo '{"pronunciation": "テストカード", "fixed_bits1": 12345, "fixed_bits2": 67890, "fixed_burst_bits": 999, "note": "テストデータ"}' | \
+grpcurl -plaintext -proto proto/admin.proto -H "api-key: $API_KEY" -d @ localhost:50051 admin.AdminSync/PushFeatureOverrides
+
+# データ取得テスト
+echo '{}' | \
+grpcurl -plaintext -proto proto/admin.proto -H "api-key: $API_KEY" -d @ localhost:50051 admin.AdminSync/PullFeatureOverrides
+```
+
+### 機能確認テスト
+```bash
+# 機能確認の記録
+echo '{"pronunciation": "テストカード", "feature_bits1": 12345, "feature_bits2": 67890, "burst_bits": 999, "rule_version": "v1.0"}' | \
+grpcurl -plaintext -proto proto/admin.proto -H "api-key: $API_KEY" -d @ localhost:50051 admin.AdminSync/ConfirmFeatures
+```
+
+### 注意事項
+- APIキーはメタデータの`api-key`フィールドで指定
+- ストリーミングメソッドには`-d @`でJSONデータを渡す
+- 権限エラーの場合は`read_write`権限のAPIキーを使用
 
 ## クライアント設定（wx_db側）
 
@@ -299,7 +381,7 @@ EOF
 
 ## 今後の拡張予定
 
-- [ ] APIキー生成CLIツール
+- [x] APIキー生成CLIツール
 - [ ] TLS証明書の自動設定
 - [ ] GetConfirmedFeatures/UnconfirmFeature実装
 - [ ] PushRulePatterns/PullRulePatterns実装

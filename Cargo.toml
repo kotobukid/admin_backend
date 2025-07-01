@@ -42,12 +42,19 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 # Stream utilities
 tokio-stream = "0.1"
 
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
 [build-dependencies]
 tonic-build = "0.12"
 
 [[bin]]
 name = "admin_backend"
 path = "src/main.rs"
+
+[[bin]]
+name = "admin-cli"
+path = "src/bin/admin_cli.rs"
 
 [profile.release]
 lto = true

@@ -15,7 +15,7 @@ pub struct ApiKey {
 }
 
 pub struct AuthService {
-    pool: SqlitePool,
+    pub pool: SqlitePool,
 }
 
 impl AuthService {
