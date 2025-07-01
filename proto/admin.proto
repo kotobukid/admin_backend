@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package admin;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// Main synchronization service
+service AdminSync {
+    // Feature Override Management
+    rpc PushFeatureOverrides(stream FeatureOverride) returns (PushResponse);
+    rpc PullFeatureOverrides(PullRequest) returns (stream FeatureOverride);
+    
+    // Feature Confirmation
+    rpc ConfirmFeatures(ConfirmRequest) returns (ConfirmResponse);
+    rpc GetConfirmedFeatures(google.protobuf.Empty) returns (stream ConfirmedFeature);
+    rpc UnconfirmFeature(UnconfirmRequest) returns (UnconfirmResponse);
+    
+    // Rule Pattern Sync
+    rpc PushRulePatterns(stream RulePattern) returns (PushResponse);
+    rpc PullRulePatterns(PullRequest) returns (stream RulePattern);
+    
+    // Metadata and Status
+    rpc GetSyncStatus(StatusRequest) returns (StatusResponse);
+    rpc RecordSync(SyncRecord) returns (google.protobuf.Empty);
+}
+
+// Feature Override (mirrors wix_card_feature_override table)
+message FeatureOverride {
+    string pronunciation = 1;
+    int64 fixed_bits1 = 2;
+    int64 fixed_bits2 = 3;
+    int64 fixed_burst_bits = 4;
+    google.protobuf.Timestamp created_at = 5;
+    google.protobuf.Timestamp updated_at = 6;
+    optional string note = 7;
+}
+
+// Confirmed Feature (new functionality)
+message ConfirmedFeature {
+    string pronunciation = 1;
+    google.protobuf.Timestamp confirmed_at = 2;
+    string confirmed_by = 3;  // client_id
+    optional string rule_version = 4;
+    int64 feature_bits1 = 5;
+    int64 feature_bits2 = 6;
+    int64 burst_bits = 7;
+}
+
+// Rule Pattern (mirrors wix_rule_pattern table)
+message RulePattern {
+    string keyword = 1;
+    string pattern = 2;
+    string feature_name = 3;
+    bool is_enabled = 4;
+    google.protobuf.Timestamp created_at = 5;
+    google.protobuf.Timestamp updated_at = 6;
+}
+
+// Request/Response messages
+message PushResponse {
+    int32 items_received = 1;
+    int32 items_updated = 2;
+    int32 items_created = 3;
+    repeated string errors = 4;
+}
+
+message PullRequest {
+    optional google.protobuf.Timestamp since = 1;  // Pull changes since this timestamp
+    optional int32 limit = 2;  // Limit number of items
+}
+
+message ConfirmRequest {
+    string pronunciation = 1;
+    int64 feature_bits1 = 2;
+    int64 feature_bits2 = 3;
+    int64 burst_bits = 4;
+    optional string rule_version = 5;
+}
+
+message ConfirmResponse {
+    bool success = 1;
+    optional string error = 2;
+}
+
+message UnconfirmRequest {
+    string pronunciation = 1;
+}
+
+message UnconfirmResponse {
+    bool success = 1;
+    optional string error = 2;
+}
+
+message StatusRequest {
+    string client_id = 1;
+}
+
+message StatusResponse {
+    google.protobuf.Timestamp server_time = 1;
+    map<string, SyncInfo> sync_status = 2;  // key: data_type (feature_override, rule_pattern, etc.)
+    int64 total_feature_overrides = 3;
+    int64 total_confirmed_features = 4;
+    int64 total_rule_patterns = 5;
+}
+
+message SyncInfo {
+    google.protobuf.Timestamp last_sync = 1;
+    int64 items_count = 2;
+}
+
+message SyncRecord {
+    string client_id = 1;
+    string sync_type = 2;  // "push" or "pull"
+    string data_type = 3;  // "feature_override", "rule_pattern", etc.
+    int32 items_count = 4;
+}
