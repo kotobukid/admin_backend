@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-Admin Backend is a gRPC-based synchronization hub for the WIXOSS Trading Card Game database (wx_db) development across multiple machines. It manages data synchronization, feature confirmation states, and ensures consistency across different development environments.
+Admin Backend is a gRPC-based synchronization hub for the Trading Card Game database development across multiple machines. It manages data synchronization, feature confirmation states, and ensures consistency across different development environments.
 
 ## Current Implementation Status
 
