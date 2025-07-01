@@ -12,6 +12,7 @@ Cargo.lock
 # Environment
 .env
 .env.local
+tls.env
 
 # Certificates (for local testing)
 /certs/

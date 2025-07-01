@@ -10,9 +10,9 @@ wx_dbの複数拠点開発用同期サーバー。WIXOSSトレーディングカ
 - APIキー認証システム
 - カード機能オーバーライドの同期（Push/Pull）
 - 機能確認の記録
+- TLS/SSL対応（Let's Encrypt証明書サポート）
 
 ### 🚧 未実装機能
-- TLS証明書設定
 - ルールパターン同期
 - 確認済み機能の取得・取消し
 - Web管理画面
@@ -262,6 +262,37 @@ grpcurl -plaintext -proto proto/admin.proto -H "api-key: $API_KEY" -d @ localhos
 - APIキーはメタデータの`api-key`フィールドで指定
 - ストリーミングメソッドには`-d @`でJSONデータを渡す
 - 権限エラーの場合は`read_write`権限のAPIキーを使用
+
+## TLS/SSL設定
+
+### 基本設定
+
+TLS（HTTPS/gRPCS）を有効にするには、環境変数で証明書のパスを指定します：
+
+```bash
+# 環境変数の設定
+export TLS_CERT_PATH=/etc/letsencrypt/live/YOUR_DOMAIN/fullchain.pem
+export TLS_KEY_PATH=/etc/letsencrypt/live/YOUR_DOMAIN/privkey.pem
+
+# サーバー起動
+RUST_LOG=info cargo run
+```
+
+### Let's Encrypt証明書の取得
+
+```bash
+# certbotで証明書取得
+sudo certbot certonly --standalone -d your-domain.com --register-unsafely-without-email --agree-tos
+```
+
+### TLS接続テスト
+
+```bash
+# TLS有効時のテスト（-plaintextオプションを削除）
+grpcurl -proto proto/admin.proto -H "api-key: YOUR_API_KEY" your-domain.com:50051 admin.AdminSync/GetSyncStatus
+```
+
+詳細な設定方法は [tls_setup.md](tls_setup.md) を参照してください。
 
 ## クライアント設定（wx_db側）
 

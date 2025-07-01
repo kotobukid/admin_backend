@@ -1,7 +1,8 @@
 use anyhow::Result;
 use sqlx::Row;
-use tonic::{transport::Server, Request, Response, Status};
-use tracing::info;
+use std::env;
+use tonic::{transport::{Server, Identity, ServerTlsConfig}, Request, Response, Status};
+use tracing::{info, warn};
 
 use crate::auth::{AuthService, authenticate_request, require_write_permission};
 use crate::database::Database;
@@ -27,14 +28,43 @@ impl AdminServer {
     pub async fn serve(self) -> Result<()> {
         let addr = "0.0.0.0:50051".parse()?;
         
-        info!("gRPC server listening on {}", addr);
+        let mut server_builder = Server::builder();
 
-        Server::builder()
+        // TLS設定の確認
+        if let (Ok(cert_path), Ok(key_path)) = (
+            env::var("TLS_CERT_PATH"),
+            env::var("TLS_KEY_PATH")
+        ) {
+            match self.setup_tls(&cert_path, &key_path).await {
+                Ok(tls_config) => {
+                    info!("TLS enabled - gRPC server listening on {} with TLS", addr);
+                    server_builder = server_builder.tls_config(tls_config)?;
+                },
+                Err(e) => {
+                    warn!("Failed to setup TLS: {}. Falling back to plaintext", e);
+                    info!("gRPC server listening on {} (plaintext)", addr);
+                }
+            }
+        } else {
+            info!("TLS not configured - gRPC server listening on {} (plaintext)", addr);
+        }
+
+        server_builder
             .add_service(AdminSyncServer::new(self))
             .serve(addr)
             .await?;
 
         Ok(())
+    }
+
+    async fn setup_tls(&self, cert_path: &str, key_path: &str) -> Result<ServerTlsConfig> {
+        let cert = tokio::fs::read(cert_path).await
+            .map_err(|e| anyhow::anyhow!("Failed to read certificate file {}: {}", cert_path, e))?;
+        let key = tokio::fs::read(key_path).await
+            .map_err(|e| anyhow::anyhow!("Failed to read private key file {}: {}", key_path, e))?;
+
+        let identity = Identity::from_pem(cert, key);
+        Ok(ServerTlsConfig::new().identity(identity))
     }
 }
 

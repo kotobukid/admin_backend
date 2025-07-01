@@ -1,0 +1,24 @@
+[Unit]
+Description=Admin Backend gRPC Service with TLS
+After=network.target
+
+[Service]
+Type=simple
+User=kotobukid
+WorkingDirectory=/home/kotobukid/admin_backend
+Environment="RUST_LOG=info"
+Environment="LIBSQLITE3_SYS_USE_PKG_CONFIG=1"
+Environment="DATABASE_URL=sqlite://data/admin.db"
+# TLS証明書設定
+Environment="TLS_CERT_PATH=/etc/letsencrypt/live/ik1-341-30725.vs.sakura.ne.jp/fullchain.pem"
+Environment="TLS_KEY_PATH=/etc/letsencrypt/live/ik1-341-30725.vs.sakura.ne.jp/privkey.pem"
+ExecStart=/home/kotobukid/admin_backend/target/debug/admin_backend
+Restart=on-failure
+RestartSec=5
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
