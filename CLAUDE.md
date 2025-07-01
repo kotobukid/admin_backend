@@ -6,6 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 Admin Backend is a gRPC-based synchronization hub for the WIXOSS Trading Card Game database (wx_db) development across multiple machines. It manages data synchronization, feature confirmation states, and ensures consistency across different development environments.
 
+## Current Implementation Status
+
+### ✅ Implemented Features
+- **gRPC Server**: Running on port 50051 with TLS support
+- **SQLite Database**: Connection and migration system
+- **API Key Authentication**: Metadata-based authentication with permission levels
+- **Core Services**:
+  - `GetSyncStatus`: Health check and sync status retrieval
+  - `PushFeatureOverrides`: Stream-based feature override upload
+  - `PullFeatureOverrides`: Query-based feature override download
+  - `ConfirmFeatures`: Feature confirmation recording
+
+### 🚧 Not Yet Implemented
+- `GetConfirmedFeatures`: Retrieve confirmed features
+- `UnconfirmFeature`: Remove feature confirmation
+- `PushRulePatterns`: Rule pattern synchronization
+- `PullRulePatterns`: Rule pattern retrieval
+- `RecordSync`: Sync metadata recording (skeleton only)
+- API key generation CLI tool
+- TLS certificate configuration
+
 ## Architecture
 
 ```
@@ -103,7 +124,38 @@ CREATE TABLE api_keys (
 - Keys stored as hashed values in SQLite
 - Per-client permissions (read/read_write)
 
+## Project Structure
+
+```
+admin_backend/
+├── src/
+│   ├── main.rs          # Entry point
+│   ├── auth.rs          # API key authentication
+│   ├── database.rs      # Database connection and migration
+│   ├── server.rs        # gRPC service implementation
+│   └── proto/           # Generated protobuf code (gitignored)
+├── proto/
+│   └── admin.proto      # gRPC service definitions
+├── migrations/
+│   └── 001_initial_schema.sql
+├── data/                # SQLite database files (gitignored)
+├── .sqlx/               # SQLx offline query cache (gitignored)
+└── Cargo.toml
+```
+
 ## Development Workflow
+
+### Running the Server
+```bash
+# Development mode
+RUST_LOG=info cargo run
+
+# With custom database
+DATABASE_URL=sqlite://custom.db cargo run
+
+# Production build
+cargo build --release
+```
 
 ### Adding New Features
 1. Update proto definitions
@@ -114,21 +166,30 @@ CREATE TABLE api_keys (
 
 ### Database Migrations
 ```bash
-# Use sqlx-cli
+# Create new migration
 sqlx migrate add <migration_name>
+
+# Run migrations
 sqlx migrate run --database-url sqlite://data/admin.db
+
+# Prepare offline queries
+DATABASE_URL=sqlite://data/admin.db cargo sqlx prepare
 ```
 
 ### Testing
 ```bash
+# Compile check
+cargo check
+
 # Unit tests
 cargo test
 
-# Integration tests with test database
-DATABASE_URL=sqlite://data/test.db cargo test --test integration
+# With test database
+DATABASE_URL=sqlite://data/test.db cargo test
 
-# gRPC testing with grpcurl
-grpcurl -H "api-key: $API_KEY" admin.example.com:50051 list
+# gRPC testing (server must be running)
+# Note: API key required for authentication
+grpcurl -plaintext -H "api-key: YOUR_API_KEY" localhost:50051 list
 ```
 
 ## Important Design Decisions
@@ -155,6 +216,18 @@ grpcurl -H "api-key: $API_KEY" admin.example.com:50051 list
 
 ## Common Operations
 
+### Start Server
+```bash
+# Basic start
+cargo run
+
+# With logging
+RUST_LOG=info cargo run
+
+# Production
+./target/release/admin_backend
+```
+
 ### Sync Feature Overrides
 ```rust
 // Client side (wx_db)
@@ -172,6 +245,18 @@ let request = ConfirmRequest {
     burst_bits: 0x90,
 };
 client.confirm_features(request).await?;
+```
+
+### Check Database Content
+```bash
+# View feature overrides
+sqlite3 data/admin.db "SELECT * FROM card_feature_override;"
+
+# View confirmed features
+sqlite3 data/admin.db "SELECT * FROM feature_confirmation;"
+
+# View API keys (hashed)
+sqlite3 data/admin.db "SELECT client_name, permissions, created_at FROM api_keys;"
 ```
 
 ## Troubleshooting

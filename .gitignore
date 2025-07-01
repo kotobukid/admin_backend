@@ -39,3 +39,6 @@ Thumbs.db
 
 # Generated protobuf code
 src/proto/
+
+# SQLx offline cache
+.sqlx/

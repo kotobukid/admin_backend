@@ -1,6 +1,49 @@
-# Admin Backend - 運用メモ
+# Admin Backend
 
-wx_dbの複数拠点開発用同期サーバー。一人開発（拠点1,2）での利用を想定。
+wx_dbの複数拠点開発用同期サーバー。WIXOSSトレーディングカードゲームのデータベース開発において、複数の開発環境間でのデータ同期を管理します。
+
+## 現在の実装状況
+
+### ✅ 実装済み機能
+- gRPCサーバー（ポート50051）
+- SQLiteデータベース接続・マイグレーション
+- APIキー認証システム
+- カード機能オーバーライドの同期（Push/Pull）
+- 機能確認の記録
+
+### 🚧 未実装機能
+- TLS証明書設定
+- APIキー生成CLIツール
+- ルールパターン同期
+- 確認済み機能の取得・取消し
+- Web管理画面
+
+## クイックスタート
+
+### 1. 開発環境での起動
+```bash
+# リポジトリをクローン
+git clone <repository>
+cd admin_backend
+
+# ビルドと起動
+RUST_LOG=info cargo run
+```
+
+### 2. データベースの確認
+```bash
+# テーブル一覧
+sqlite3 data/admin.db ".tables"
+
+# スキーマ確認
+sqlite3 data/admin.db ".schema"
+```
+
+### 3. gRPCテスト（APIキーなしで接続テスト）
+```bash
+# サービス一覧の取得（認証エラーになるが接続は確認できる）
+grpcurl -plaintext localhost:50051 list
+```
 
 ## 初期セットアップ
 
@@ -124,12 +167,18 @@ chmod 600 data/admin.db
 
 ## APIキー生成
 
-```bash
-# 初回のAPIキー生成（実装予定のCLIツール）
-./target/release/admin_backend generate-key --name "dev-machine-1" --permission read_write
+現在はCLIツール未実装のため、SQLiteで直接生成：
 
-# 生成されたキーを安全に保管
-# 例: ADM_1234567890abcdef...
+```bash
+# SQLiteでAPIキーを手動生成（開発環境用）
+sqlite3 data/admin.db <<EOF
+INSERT INTO api_keys (key_hash, client_name, permissions, created_at)
+VALUES ('temporary_dev_key', 'dev-machine-1', 'read_write', datetime('now'));
+EOF
+
+# 注意：本番環境では必ずハッシュ化されたキーを使用すること
+# CLIツール実装後は以下のような形になる予定：
+# ./target/release/admin_backend generate-key --name "dev-machine-1" --permission read_write
 ```
 
 ## クライアント設定（wx_db側）
@@ -192,10 +241,14 @@ sudo systemctl start admin-backend
 ### gRPCデバッグ
 ```bash
 # grpcurlでテスト（要インストール）
+# 開発環境（プレーンテキスト）
+grpcurl -plaintext -H "api-key: YOUR_API_KEY" localhost:50051 list
+
+# 本番環境（TLS）
 grpcurl -H "api-key: YOUR_API_KEY" admin.example.com:50051 list
 
 # ヘルスチェック
-grpcurl -H "api-key: YOUR_API_KEY" admin.example.com:50051 admin.AdminSync/GetSyncStatus
+grpcurl -plaintext -H "api-key: YOUR_API_KEY" localhost:50051 admin.AdminSync/GetSyncStatus
 ```
 
 ## 運用上の注意
@@ -217,9 +270,42 @@ grpcurl -H "api-key: YOUR_API_KEY" admin.example.com:50051 admin.AdminSync/GetSy
    - 定期的にキーをローテーション
    - 不要なポートは閉じる
 
+## 開発メモ
+
+### 依存関係
+- Rust 1.70以上
+- SQLite 3.35以上（JSON関数サポートのため）
+- protobuf-compiler（protocコマンド）
+
+### ビルド最適化
+```bash
+# リリースビルド
+cargo build --release
+
+# サイズ最適化
+cargo build --release --profile=release
+```
+
+### テスト用データの投入
+```bash
+# カード機能オーバーライドのテストデータ
+sqlite3 data/admin.db <<EOF
+INSERT INTO card_feature_override (pronunciation, fixed_bits1, fixed_bits2, fixed_burst_bits, created_at, updated_at)
+VALUES 
+  ('テストカード', 1, 2, 3, datetime('now'), datetime('now')),
+  ('サンプルカード', 4, 5, 6, datetime('now'), datetime('now'));
+EOF
+```
+
 ## 今後の拡張予定
 
+- [ ] APIキー生成CLIツール
+- [ ] TLS証明書の自動設定
+- [ ] GetConfirmedFeatures/UnconfirmFeature実装
+- [ ] PushRulePatterns/PullRulePatterns実装
 - [ ] Web管理画面
 - [ ] 差分同期の最適化
 - [ ] コンフリクト解決UI
 - [ ] 監視ダッシュボード
+- [ ] Docker対応
+- [ ] GitHub Actions CI/CD
